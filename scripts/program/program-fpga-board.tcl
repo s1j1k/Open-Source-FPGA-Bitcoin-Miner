@@ -56,17 +56,41 @@ if {[llength $hardware_names] == 0} {
 	exit
 }
 
-puts -nonewline "\nWhich USB device would you like to program? "
-gets stdin selected_hardware_id
-puts ""
+if {[llength $hardware_names] == 1} {
+	set hardware_name [lindex $hardware_names 0]
+} else {
+	puts -nonewline "\nWhich USB device would you like to program? "
+	gets stdin selected_hardware_id
+	puts ""
 
-set hardware_name [get_selected_list_item $hardware_names $selected_hardware_id]
+	set hardware_name [get_selected_list_item $hardware_names $selected_hardware_id]
+}
 
 puts "Selected USB device: $hardware_name\n\n\n"
 
 
-# Now let the user select which SOF to program
-set sof_files [glob *.sof]
+# Find the FPGA's position on the JTAG chain. SoC boards (e.g. DE1-SoC) put
+# the HPS (ARM DAP, "SOCVHPS") first and the FPGA second, so programming
+# device @1 would fail there.
+set device_index 1
+foreach device_name [get_device_names -hardware_name $hardware_name] {
+	if {[string match "*SOCVHPS*" $device_name]} {
+		continue
+	}
+	if {[regexp {^@(\d+)} $device_name -> device_index]} {
+		break
+	}
+}
+puts "Using JTAG device @$device_index\n"
+
+
+# Now let the user select which SOF to program. A SOF path may also be passed
+# on the command line: quartus_stp -t program-fpga-board.tcl path/to/file.sof
+if {[llength $argv] > 0} {
+	set sof_files [list [lindex $argv 0]]
+} else {
+	set sof_files [glob -nocomplain *.sof]
+}
 set id 0
 
 foreach sof_file $sof_files {
@@ -79,20 +103,25 @@ if {[llength $sof_files] == 0} {
 	exit
 }
 
-puts -nonewline "\nWhich SOF would you like to use? "
-gets stdin selected_sof_id
-puts ""
+if {[llength $sof_files] == 1} {
+	set sof_name [lindex $sof_files 0]
+} else {
+	puts -nonewline "\nWhich SOF would you like to use? "
+	gets stdin selected_sof_id
+	puts ""
 
-set sof_name [get_selected_list_item $sof_files $selected_sof_id]
+	set sof_name [get_selected_list_item $sof_files $selected_sof_id]
+}
 
 puts "Selected SOF file: $sof_name\n\n\n"
 
 
 # Now program the bugger
 puts "Programming ..."
-#quartus_pgm -c $hardware_name -m JTAG -o P;$sof_name
-set operation "P;$sof_name"
-if {[catch {exec quartus_pgm -c $hardware_name -m JTAG -o $operation} result]} {
+#quartus_pgm -c $hardware_name -m JTAG -o P;$sof_name@$device_index
+set operation "P;$sof_name@$device_index"
+set quartus_pgm [file join $quartus(binpath) quartus_pgm]
+if {[catch {exec $quartus_pgm -c $hardware_name -m JTAG -o $operation} result]} {
 	puts "\nResult: $result\n"
 	puts "ERROR: Programming failed.\n"
 } else {

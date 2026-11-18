@@ -1,2 +1,2 @@
-%QUARTUS_ROOTDIR%\bin\quartus_stp -t mine.tcl
-PAUSE
+"%QUARTUS_ROOTDIR%\bin64\quartus_stp.exe" -t mine.tcl
+PAUSE

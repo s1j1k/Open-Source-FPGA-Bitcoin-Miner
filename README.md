@@ -1,6 +1,75 @@
 Open-Source FPGA Bitcoin Miner
 ==============================================
 
+DE1-SoC Port (this fork)
+------------------------
+
+This fork ports the miner to the **Terasic DE1-SoC** (Intel/Altera Cyclone V SoC,
+5CSEMA5F31C6) and current Quartus Prime Lite tooling (25.1). It adds a hardware
+self-test with known-answer vectors. The original project targeted Cyclone IV
+boards and Quartus II 10.x from 2011.
+
+**Status:** the RTL port and test tooling are done and verified offline. On-hardware
+bring-up (synthesis, timing closure, self-test on the board) is in progress.
+
+### What changed
+
+| Area | Change |
+|------|--------|
+| Board support | New `boards/DE1_SoC` pin and device constraints (50 MHz clock on `PIN_AF14`). |
+| Clocking | New `cores/cyclone_v_pll`: Cyclone V has no `altpll`, so this wraps `altera_pll`. It keeps the same integer parameters as the Cyclone IV version, so the shared top-level is unchanged. The PLL is bypassed when no frequency change is needed. |
+| Project | `projects/DE1_SoC_Unoptimized_Pipelined`: half-unrolled SHA-256 pipeline (64 stages), 50 MHz, about 25 MH/s. The pipeline depth (`CONFIG_LOOP_LOG2`) and clock can be changed in the `.qsf`. |
+| JTAG / programming | On SoC boards the ARM HPS debug port is first on the JTAG chain (`@1`) and the FPGA is second (`@2`). The original script programmed `@1`. It now finds the FPGA by name, and skips the device prompts when there is only one choice. |
+| Tooling | `scripts/de1soc`: one-step build, program and Quartus install scripts, using 64-bit Quartus binaries. |
+
+### Verification approach
+
+The FPGA talks to the host through In-System Sources and Probes over JTAG. The
+host writes the midstate (`STAT`) and block-header tail (`DAT2`), and reads back
+the golden nonce (`GNON`) and the live nonce counter (`NONC`).
+
+1. **Known-answer vectors, checked against a reference model**
+   (`scripts/test/test_vectors.py`). It builds the exact `STAT`/`DAT2` words the
+   host writes for two real block headers: a share from the original testbench,
+   and the Bitcoin genesis block. A bit-accurate Python model of the RTL datapath
+   (word ordering, padding, the double SHA-256 and the golden-ticket comparison)
+   then runs on those words. The result is cross-checked against `hashlib`, and a
+   negative case (nonce + 1) must fail. Writing this model exposed and fixed a
+   padding/byte-order error before it reached hardware.
+2. **Hardware self-test** (`scripts/test/selftest.tcl`). It drives the real board
+   over JTAG with those vectors and passes only when the reported nonce matches.
+   It is designed around the hardware's behaviour:
+   - The nonce counter free-runs and isn't reset when new work arrives. The test
+     therefore tracks how far the counter has travelled, modulo 2^32, and checks
+     the result only once the counter has swept past the expected nonce.
+   - Two vectors with different answers run back to back, so a result left over
+     from an earlier run cannot produce a false pass.
+   - A stalled counter (no hash clock) is detected and reported as its own
+     failure. Hash rate is measured live.
+3. **Host-side tests without hardware.** The self-test and programming scripts
+   were run against a mocked Quartus JTAG API that simulates the DE1-SoC's
+   two-device chain. This covered the pass path, the broken-firmware path, the
+   stalled-clock path, and FPGA (`@2`) selection.
+
+### Quick start (Windows)
+
+```
+scripts\de1soc\install-quartus.ps1   # or install Quartus Prime Lite + Cyclone V + USB-Blaster II driver manually
+python scripts\test\test_vectors.py  # offline vector check, no board needed
+scripts\de1soc\build.bat             # synthesize, fit, timing analysis -> fpgaminer.sof
+scripts\de1soc\program.bat           # load the FPGA over the on-board USB-Blaster II
+scripts\test\selftest.bat            # on-hardware known-answer test
+```
+
+See `projects/DE1_SoC_Unoptimized_Pipelined/README.md` for configuration and
+tuning. *Note:* the `scripts/mine` pool client uses the legacy getwork protocol,
+which modern pools no longer serve. This fork is an FPGA design and verification
+exercise, not a profitable miner.
+
+--------------------------------------------------------------------------------
+
+*The original project README follows.*
+
 --------------------------------------------------------------------------------
 Copyright (C) 2011 fpgaminer@bitcoin-mining.com
 

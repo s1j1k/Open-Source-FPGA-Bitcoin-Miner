@@ -1,0 +1,20 @@
+# Terasic DE1-SoC (Cyclone V SoC 5CSEMA5F31C6)
+#
+# Only the FPGA fabric is used; the HPS (ARM) side is left unconfigured.
+# The FPGA is programmed and controlled over the on-board USB-Blaster II.
+# On the JTAG chain the HPS DAP is device @1 and the FPGA is device @2.
+
+set_global_assignment -name FAMILY "Cyclone V"
+set_global_assignment -name DEVICE 5CSEMA5F31C6
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR 256
+set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
+set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY quartus_output
+set_global_assignment -name RESERVE_ALL_UNUSED_PINS_WEAK_PULLUP "AS INPUT TRI-STATED"
+
+
+# Clocks
+set_location_assignment PIN_AF14 -to MAIN_CLK
+set_instance_assignment -name IO_STANDARD "3.3-V LVTTL" -to MAIN_CLK

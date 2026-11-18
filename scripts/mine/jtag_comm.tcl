@@ -170,17 +170,21 @@ proc find_miner_fpga {} {
 		return -1
 	}
 
-	puts -nonewline "\nWhich USB device would you like to scan? "
-	gets stdin selected_hardware_id
-	puts ""
+	if {[llength $hardware_names] == 1} {
+		set hardware_name [lindex $hardware_names 0]
+	} else {
+		puts -nonewline "\nWhich USB device would you like to scan? "
+		gets stdin selected_hardware_id
+		puts ""
 
-	set hardware_name [get_selected_list_item $hardware_names $selected_hardware_id]
+		set hardware_name [get_selected_list_item $hardware_names $selected_hardware_id]
+	}
 
 	puts "Selected USB device: $hardware_name\n\n\n"
 
 	if {[catch { set device_names [get_device_names -hardware_name $hardware_name] } exc]} {
-		#puts stderr "DEV-REMOVE: Error on get_device_names: $exc"
-		continue
+		puts stderr "ERROR: Could not list devices on $hardware_name: $exc"
+		return -1
 	}
 
 	foreach device_name $device_names {
