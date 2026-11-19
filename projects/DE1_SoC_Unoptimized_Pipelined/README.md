@@ -9,8 +9,12 @@ Differences from DE2_115_Unoptimized_Pipelined:
  * boards/DE1_SoC: device 5CSEMA5F31C6, CLOCK_50 on PIN_AF14.
  * cores/cyclone_v_pll: Cyclone V has no altpll; this uses altera_pll and is
    bypassed when MAIN_CLK_MULTIPLY == MAIN_CLK_DIVIDE.
- * LOOP_LOG2 = 1 (half-unrolled, 64 stages) at 50 MHz = 25 MH/s. The fully
-   unrolled core (LOOP_LOG2 = 0) is a tight fit on this device.
+ * LOOP_LOG2 = 2 (32 stages) at 100 MHz = 25 MH/s. LOOP_LOG2 = 1 needs 37.8k
+   ALMs and does not fit the 5CSEMA5 (32,070 ALMs).
+
+Measured results (Quartus Prime Lite 25.1): 19,033 ALMs (59%), timing met at
+100 MHz (worst setup slack +0.109 ns, Fmax 101.1 MHz), 25.00 MH/s on hardware,
+self-test 2/2 passed.
  * The JTAG chain has the HPS at @1 and the FPGA at @2;
    scripts/program/program-fpga-board.tcl now finds the FPGA automatically.
 
@@ -43,6 +47,6 @@ verifies the vectors offline (no FPGA needed) against a model of the hardware.
 Going faster
 ------------
 
-1. Raise the hash clock, e.g. MAIN_CLK_MULTIPLY=2 for 100 MHz, rebuild, and
-   check quartus_output\fpgaminer.sta.summary for negative slack.
-2. Try CONFIG_LOOP_LOG2=0 (doubles hashes per clock) if it fits.
+The 100 MHz build has only ~0.1 ns of slack, so a higher clock needs
+pipelining in the round logic rather than a PLL change. With 41% of the device
+free, a second hashing core is the other way to scale.

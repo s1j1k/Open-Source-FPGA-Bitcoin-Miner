@@ -16,3 +16,7 @@ impact_impact.xwbt
 *.bak
 *.vpp
 *.vcd
+__pycache__
+*.pyc
+c5_pin_model_dump.txt
+*.qws
