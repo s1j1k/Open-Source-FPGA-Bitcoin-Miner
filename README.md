@@ -19,6 +19,15 @@ boards and Quartus II 10.x from 2011.
 | Self-test | 2/2 known-answer vectors passed on the board |
 | Independent check | The FPGA also found two nonces that were not planted (`0x9ccdef20`, `0xacbba77f`). Both were confirmed as valid with `hashlib` |
 
+<p>
+  <img src="docs/de1soc_board.jpg" alt="DE1-SoC board mining, 7-segment displays reading 25000" width="58%">
+  <img src="docs/de1soc_display.jpg" alt="Close-up of the 7-segment displays and status LEDs" width="38%">
+</p>
+
+*The DE1-SoC mining. The displays show the hash rate measured in hardware,
+25000 kH/s (25 MH/s). LEDR0 is the hash heartbeat, and LEDR9–LEDR5 count
+golden nonces found, in binary.*
+
 ![Operator dashboard running against the DE1-SoC](docs/dashboard.png)
 
 *The operator dashboard running live against the DE1-SoC: 25 MH/s, with six
