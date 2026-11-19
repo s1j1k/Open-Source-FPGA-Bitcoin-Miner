@@ -11,12 +11,12 @@ Differences from DE2_115_Unoptimized_Pipelined:
    bypassed when MAIN_CLK_MULTIPLY == MAIN_CLK_DIVIDE.
  * LOOP_LOG2 = 2 (32 stages) at 100 MHz = 25 MH/s. LOOP_LOG2 = 1 needs 37.8k
    ALMs and does not fit the 5CSEMA5 (32,070 ALMs).
-
-Measured results (Quartus Prime Lite 25.1): 19,033 ALMs (59%), timing met at
-100 MHz (worst setup slack +0.109 ns, Fmax 101.1 MHz), 25.00 MH/s on hardware,
-self-test 2/2 passed.
  * The JTAG chain has the HPS at @1 and the FPGA at @2;
    scripts/program/program-fpga-board.tcl now finds the FPGA automatically.
+
+Measured results (Quartus Prime Lite 25.1, with the on-board HMI):
+19,433 ALMs (61%), timing met at 100 MHz (worst setup slack +0.248 ns, Fmax 102.5 MHz), 25.00 MH/s on hardware,
+self-test 2/2 passed.
 
 
 Requirements

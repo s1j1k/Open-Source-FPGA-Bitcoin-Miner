@@ -28,6 +28,12 @@
 
 module fpgaminer_top (
 	input MAIN_CLK
+`ifdef CONFIG_HMI
+	,
+	input [9:0] SW,
+	output [9:0] LEDR,
+	output [6:0] HEX0, HEX1, HEX2, HEX3, HEX4, HEX5
+`endif
 );
 
 	// The LOOP_LOG2 parameter determines how unrolled the SHA-256
@@ -106,13 +112,64 @@ module fpgaminer_top (
 
 	//// Virtual Wire Output
 	reg [31:0] golden_nonce = 0;
+	reg is_golden_ticket = 1'b0;
 	
 	virtual_wire # (.INPUT_WIDTH(32), .INSTANCE_ID("GNON")) golden_nonce_vw_blk (.clk (hash_clk), .rx_data (golden_nonce), .tx_data ());
 	virtual_wire # (.INPUT_WIDTH(32), .INSTANCE_ID("NONC")) nonce_vw_blk (.clk (hash_clk), .rx_data (nonce), .tx_data ());
 
 
+	//// Operator controls
+	// halt stops the nonce counter. golden_enable masks the golden-ticket
+	// check while halted and until the pipeline has refilled after a restart,
+	// because golden_nonce is derived from the current nonce minus a fixed
+	// pipeline offset, which only holds while the nonce advances steadily.
+	wire halt;
+	reg [7:0] run_settle = 8'd0;
+	wire golden_enable = !halt && (run_settle == 8'hFF);
+
+	always @ (posedge hash_clk)
+	begin
+		if (halt)
+			run_settle <= 8'd0;
+		else if (run_settle != 8'hFF)
+			run_settle <= run_settle + 8'd1;
+	end
+
+`ifdef CONFIG_HMI
+	wire [15:0] found_count;
+	reg [255:0] midstate_prev = 0;
+	reg [255:0] data_prev = 0;
+	reg new_work = 1'b0;
+
+	always @ (posedge hash_clk)
+	begin
+		midstate_prev <= midstate_buf;
+		data_prev <= data_buf;
+		new_work <= (midstate_prev != midstate_buf) || (data_prev != data_buf);
+	end
+
+	board_hmi # (.MAIN_CLK_MHZ(`MAIN_CLK_FREQUENCY)) hmi_blk (
+		.main_clk (MAIN_CLK),
+		.hash_clk (hash_clk),
+		.nonce (nonce),
+		.golden_nonce (golden_nonce),
+		.golden_found (is_golden_ticket),
+		.new_work (new_work),
+		.sw (SW),
+		.ledr (LEDR),
+		.hex0 (HEX0), .hex1 (HEX1), .hex2 (HEX2), .hex3 (HEX3), .hex4 (HEX4), .hex5 (HEX5),
+		.halt (halt),
+		.found_count (found_count)
+	);
+
+	// Status for the host: {halted, 5'b0, switches[9:0], golden nonces found[15:0]}
+	virtual_wire # (.INPUT_WIDTH(32), .INSTANCE_ID("STUS")) status_vw_blk (.clk (hash_clk), .rx_data ({halt, 5'd0, SW, found_count}), .tx_data ());
+`else
+	assign halt = 1'b0;
+`endif
+
+
 	//// Control Unit
-	reg is_golden_ticket = 1'b0;
 	reg feedback_d1 = 1'b1;
 	wire [5:0] cnt_next;
 	wire [31:0] nonce_next;
@@ -123,7 +180,7 @@ module fpgaminer_top (
 	// on 1..LOOP-1, take feedback from current stage
 	// This reduces the throughput by a factor of (LOOP), but also reduces the design size by the same amount
 	assign feedback_next = (LOOP == 1) ? 1'b0 : (cnt_next != {(LOOP_LOG2){1'b0}});
-	assign nonce_next = feedback_next ? nonce : (nonce + 32'd1);
+	assign nonce_next = (feedback_next || halt) ? nonce : (nonce + 32'd1);
 
 	
 	always @ (posedge hash_clk)
@@ -142,7 +199,7 @@ module fpgaminer_top (
 
 
 		// Check to see if the last hash generated is valid.
-		is_golden_ticket <= (hash2[255:224] == 32'h00000000) && !feedback_d1;
+		is_golden_ticket <= (hash2[255:224] == 32'h00000000) && !feedback_d1 && golden_enable;
 		if(is_golden_ticket)
 		begin
 			// TODO: Find a more compact calculation for this

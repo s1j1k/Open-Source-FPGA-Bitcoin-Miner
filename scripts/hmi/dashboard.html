@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Miner Operator Console</title>
+<style>
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --border: #e1e0d9;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --series: #2a78d6;
+  --good: #0ca30c;
+  --good-text: #006300;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --tint-critical: #fbeaea;
+  --tint-serious: #fdf0ea;
+  --tint-warning: #fef6e3;
+  --tint-good: #e8f6e8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --border: #2c2c2a;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --series: #3987e5;
+    --good-text: #0ca30c;
+    --tint-critical: #3a1d1d;
+    --tint-serious: #3a261d;
+    --tint-warning: #3a311a;
+    --tint-good: #183018;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+.sub { color: var(--ink-2); }
+.spacer { flex: 1; }
+.mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.card h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .04em; }
+
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-weight: 600; font-size: 13px; border: 1px solid var(--border); }
+.badge { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 800; flex: none; }
+.badge.good { background: var(--good); }
+.badge.warning { background: var(--warning); color: #0b0b0b; }
+.badge.serious { background: var(--serious); color: #0b0b0b; }
+.badge.critical { background: var(--critical); }
+.badge.info { background: var(--muted); }
+
+#alarms { display: grid; gap: 8px; margin-bottom: 16px; }
+.alarm-bar { display: flex; justify-content: flex-end; }
+.alarm { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); font-weight: 550; }
+.alarm.critical { background: var(--tint-critical); border-color: var(--critical); }
+.alarm.serious { background: var(--tint-serious); border-color: var(--serious); }
+.alarm.warning { background: var(--tint-warning); border-color: var(--warning); }
+.alarm.good { background: var(--tint-good); border-color: var(--good); }
+.alarm .lvl { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); min-width: 64px; }
+.alarm.acked { opacity: .7; font-weight: 400; }
+.alarm .since { margin-left: auto; color: var(--ink-2); font-weight: 400; font-size: 13px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile .value { font-size: 34px; font-weight: 650; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .unit { font-size: 15px; color: var(--ink-2); font-weight: 500; margin-left: 4px; }
+.tile .note { color: var(--ink-2); margin-top: 6px; font-size: 13px; }
+.bar { height: 6px; border-radius: 3px; background: var(--grid); margin-top: 10px; overflow: hidden; }
+.bar > div { height: 100%; background: var(--series); border-radius: 3px; width: 0; }
+
+.chart-card { margin-bottom: 16px; }
+.chart-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+.chart-head .controls { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+#chart { position: relative; height: 240px; margin-top: 8px; }
+#chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+#chart .gridline { stroke: var(--grid); stroke-width: 1; }
+#chart .baseline { stroke: var(--axis); stroke-width: 1; }
+#chart .tick { fill: var(--muted); font-size: 11px; }
+#chart .line { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+#chart .expected { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 4 4; }
+#chart .expected-label { fill: var(--ink-2); font-size: 11px; }
+#chart .crosshair { stroke: var(--ink-2); stroke-width: 1; }
+#chart .dot { fill: var(--series); stroke: var(--surface); stroke-width: 2; }
+#chart .empty { fill: var(--muted); font-size: 13px; }
+.tooltip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 14px rgba(0,0,0,.12); font-size: 13px; white-space: nowrap; display: none; }
+.tooltip .tv { font-weight: 700; font-size: 15px; }
+.tooltip .key { display: inline-block; width: 14px; height: 2px; background: var(--series); vertical-align: middle; margin-right: 6px; }
+.tooltip .tt { color: var(--ink-2); }
+
+button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--axis); background: var(--surface); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--series); }
+button:focus-visible { outline: 2px solid var(--series); outline-offset: 2px; }
+
+.cols { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; color: var(--ink-2); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+td.verify { white-space: nowrap; }
+.hash { color: var(--ink-2); }
+.scroll { max-height: 320px; overflow: auto; }
+.log li { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.log ul { list-style: none; margin: 0; padding: 0; }
+.log time { color: var(--muted); font-size: 12px; min-width: 62px; padding-top: 1px; }
+.empty-row { color: var(--muted); padding: 12px 8px; }
+details { margin-top: 10px; color: var(--ink-2); }
+details table { margin-top: 8px; }
+footer { color: var(--muted); font-size: 12px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>FPGA Miner Operator Console</h1>
+      <div class="sub"><span id="board">Waiting for board…</span></div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="link"><span class="badge info">…</span><span>Connecting</span></span>
+    <span class="sub">Uptime <span id="uptime" class="mono">0:00:00</span></span>
+  </header>
+
+  <section id="alarms" aria-live="polite"></section>
+
+  <section class="tiles">
+    <div class="card tile">
+      <h2>Hash rate</h2>
+      <div><span class="value" id="rate">–</span><span class="unit">MH/s</span></div>
+      <div class="note" id="rate-note">Expected –</div>
+    </div>
+    <div class="card tile">
+      <h2>Nonce counter</h2>
+      <div class="value mono" id="nonce" style="font-size:28px">–</div>
+      <div class="bar" aria-hidden="true"><div id="sweep"></div></div>
+      <div class="note" id="sweep-note">Sweep progress –</div>
+    </div>
+    <div class="card tile">
+      <h2>Golden nonces</h2>
+      <div><span class="value" id="found">0</span><span class="unit">verified</span></div>
+      <div class="note" id="found-note">Expected about 1 per 2^32 hashes</div>
+    </div>
+    <div class="card tile">
+      <h2>Board state</h2>
+      <div class="value" id="state" style="font-size:26px">–</div>
+      <div class="note" id="state-note">–</div>
+    </div>
+  </section>
+
+  <section class="card chart-card">
+    <div class="chart-head">
+      <h2 style="margin:0">Hash rate, last 10 minutes (MH/s)</h2>
+      <span class="sub" id="work-label">No work loaded</span>
+      <div class="controls">
+        <button data-work="random" title="Random block header: shows live mining">New random work</button>
+        <button data-work="test_share" title="Testbench header with known valid nonces">Load test share</button>
+        <button data-work="genesis" title="Bitcoin genesis block header">Load genesis block</button>
+      </div>
+    </div>
+    <div id="chart"><div class="tooltip" id="tip"></div></div>
+    <details>
+      <summary>Show data table</summary>
+      <div class="scroll"><table><thead><tr><th>Time</th><th>MH/s</th></tr></thead><tbody id="history-table"></tbody></table></div>
+    </details>
+  </section>
+
+  <section class="cols">
+    <div class="card">
+      <h2>Golden nonces found (checked in software)</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Time</th><th>Nonce</th><th>Block hash</th><th>Work</th><th>Check</th></tr></thead>
+          <tbody id="found-table"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card log">
+      <h2>Event log</h2>
+      <div class="scroll"><ul id="events"></ul></div>
+    </div>
+  </section>
+
+  <footer>Local only (127.0.0.1). Data: JTAG In-System Sources and Probes via quartus_stp, sampled every 200 ms. Each nonce is checked with an independent double SHA-256 in Python.</footer>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const BADGE = { good: "✓", warning: "!", serious: "!", critical: "✕", info: "i" };
+const LEVEL_NAME = { good: "OK", warning: "Warning", serious: "Serious", critical: "Critical", info: "Info" };
+let state = null;
+
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else e.setAttribute(k, v);
+  }
+  for (const c of children) e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  return e;
+}
+const badge = (level) => el("span", { class: "badge " + level, "aria-hidden": "true" }, BADGE[level] || "i");
+const fmtTime = (t) => new Date(t * 1000).toLocaleTimeString([], { hour12: false });
+function fmtDuration(s) {
+  s = Math.floor(s);
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = s % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function renderHeader(s) {
+  $("board").textContent = s.board || "Waiting for board…";
+  $("uptime").textContent = fmtDuration(s.uptime_s);
+  const link = $("link");
+  link.replaceChildren(badge(s.link_ok ? "good" : "critical"), el("span", {}, s.link_ok ? "JTAG link up" : "JTAG link down"));
+}
+
+function renderAlarms(s) {
+  const box = $("alarms");
+  box.replaceChildren();
+  if (!s.alarms.length) {
+    box.append(el("div", { class: "alarm good" }, badge("good"), el("span", { class: "lvl" }, "OK"), "All checks nominal"));
+    return;
+  }
+  for (const a of s.alarms) {
+    box.append(el("div", { class: "alarm " + a.level + (a.acked ? " acked" : ""), role: a.acked ? "status" : "alert" },
+      badge(a.level), el("span", { class: "lvl" }, LEVEL_NAME[a.level]), el("span", {}, a.message),
+      el("span", { class: "since" }, (a.acked ? "acknowledged · " : "") + "since " + fmtTime(a.since))));
+  }
+  if (s.alarms.some((a) => !a.acked)) {
+    const ack = el("button", { type: "button" }, "Acknowledge alarms");
+    ack.addEventListener("click", async () => { await fetch("/api/ack", { method: "POST" }); tick(); });
+    box.append(el("div", { class: "alarm-bar" }, ack));
+  }
+}
+
+function renderTiles(s) {
+  $("rate").textContent = s.link_ok ? s.rate_mhs.toFixed(2) : "–";
+  const dev = s.expected_mhs ? ((s.rate_mhs - s.expected_mhs) / s.expected_mhs) * 100 : 0;
+  $("rate-note").textContent = `Expected ${s.expected_mhs.toFixed(2)} MH/s` + (s.link_ok ? ` (${dev >= 0 ? "+" : ""}${dev.toFixed(1)}%)` : "");
+  $("nonce").textContent = s.nonce ? "0x" + s.nonce : "–";
+  $("sweep").style.width = (s.sweep_pct || 0).toFixed(1) + "%";
+  const sweepSecs = s.rate_mhs > 0 ? (2 ** 32 / (s.rate_mhs * 1e6)) : 0;
+  $("sweep-note").textContent = s.sweep_pct == null ? "Sweep progress –"
+    : `${s.sweep_pct.toFixed(1)}% of 2^32` + (sweepSecs ? ` · full sweep every ${(sweepSecs / 60).toFixed(1)} min` : "");
+  $("found").textContent = s.found_valid;
+  const fpga = s.fpga_found_count == null ? "" : ` · FPGA counter ${s.fpga_found_count}`;
+  $("found-note").textContent = (s.found_invalid ? `${s.found_invalid} failed check` : "0 failed check") + fpga;
+
+  let label, note;
+  if (!s.link_ok) { label = "Offline"; note = "No data from the board"; }
+  else if (!s.has_status) { label = "Running"; note = "Firmware has no status probe"; }
+  else if (s.halted) { label = "Halted"; note = "SW9 is up (operator stop)"; }
+  else { label = "Running"; note = ""; }
+  if (s.link_ok && s.switches != null) {
+    note = (note ? note + " · " : "") + `Display: ${(s.switches & 1) ? "last nonce (SW0 up)" : "hash rate (SW0 down)"}`;
+  }
+  $("state").replaceChildren(badge(!s.link_ok ? "critical" : s.halted ? "warning" : "good"), " ", label);
+  $("state-note").textContent = note;
+  $("work-label").textContent = s.work ? `Work #${s.work.id}: ${s.work.label}, sent ${fmtTime(s.work.sent_at)}` : "No work loaded";
+}
+
+function renderFound(s) {
+  const body = $("found-table");
+  body.replaceChildren();
+  if (!s.found.length) {
+    body.append(el("tr", {}, el("td", { class: "empty-row", colspan: "5" }, "None yet. At 25 MH/s expect about one every 3 minutes on random work.")));
+    return;
+  }
+  for (const f of s.found) {
+    const check = f.valid ? el("span", {}, badge("good"), " Verified") : el("span", {}, badge("critical"), " Failed");
+    body.append(el("tr", {},
+      el("td", {}, fmtTime(f.t)),
+      el("td", { class: "mono" }, "0x" + f.nonce),
+      el("td", { class: "mono hash", title: f.hash }, f.hash ? f.hash.slice(0, 20) + "…" : "–"),
+      el("td", {}, f.work_id == null ? "–" : "#" + f.work_id),
+      el("td", { class: "verify" }, check)));
+  }
+}
+
+function renderEvents(s) {
+  const ul = $("events");
+  ul.replaceChildren();
+  for (const e of s.events) {
+    ul.append(el("li", {}, el("time", {}, fmtTime(e.t)), badge(e.level), el("span", {}, e.message)));
+  }
+}
+
+function renderHistoryTable(s) {
+  const body = $("history-table");
+  if (!body.closest("details").open) return;
+  body.replaceChildren();
+  for (const [t, v] of s.history.slice().reverse().slice(0, 120)) {
+    body.append(el("tr", {}, el("td", {}, fmtTime(t)), el("td", { class: "mono" }, v.toFixed(2))));
+  }
+}
+
+// Chart: one series, so no legend; expected rate as a dashed reference line.
+const NS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+let geom = null;
+
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const p = 10 ** Math.floor(Math.log10(v));
+  for (const m of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+
+function renderChart(s) {
+  const box = $("chart");
+  const W = box.clientWidth, H = box.clientHeight;
+  const m = { l: 40, r: 64, t: 10, b: 24 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  box.querySelector("svg")?.remove();
+  const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Hash rate over the last 10 minutes" });
+  box.prepend(svg);
+
+  const now = Math.floor(s.now), t0 = now - 600;
+  const pts = s.history.filter(([t]) => t >= t0);
+  const yMax = niceMax(Math.max(s.expected_mhs * 1.2, ...pts.map((p) => p[1])));
+  const x = (t) => m.l + ((t - t0) / 600) * iw;
+  const y = (v) => m.t + ih - (v / yMax) * ih;
+
+  for (let i = 0; i <= 4; i++) {
+    const v = (yMax / 4) * i, yy = y(v);
+    svg.append(svgEl("line", { class: i === 0 ? "baseline" : "gridline", x1: m.l, x2: m.l + iw, y1: yy, y2: yy }));
+    const lab = svgEl("text", { class: "tick", x: m.l - 6, y: yy + 4, "text-anchor": "end" });
+    lab.textContent = Number.isInteger(v) ? v : v.toFixed(1);
+    svg.append(lab);
+  }
+  for (let k = 0; k <= 5; k++) {
+    const t = t0 + k * 120;
+    const lab = svgEl("text", { class: "tick", x: x(t), y: H - 6, "text-anchor": k === 0 ? "start" : k === 5 ? "end" : "middle" });
+    lab.textContent = k === 5 ? "now" : `-${10 - k * 2} min`;
+    svg.append(lab);
+  }
+  const ye = y(s.expected_mhs);
+  svg.append(svgEl("line", { class: "expected", x1: m.l, x2: m.l + iw, y1: ye, y2: ye }));
+  const el2 = svgEl("text", { class: "expected-label", x: m.l + iw + 6, y: ye + 4 });
+  el2.textContent = "expected";
+  svg.append(el2);
+
+  if (pts.length < 2) {
+    const e = svgEl("text", { class: "empty", x: m.l + iw / 2, y: m.t + ih / 2, "text-anchor": "middle" });
+    e.textContent = "Collecting data…";
+    svg.append(e);
+  } else {
+    // Break the line where samples are missing (> 3 s gap), e.g. link down
+    let d = "", prev = null;
+    for (const [t, v] of pts) {
+      d += (prev === null || t - prev > 3 ? "M" : "L") + x(t).toFixed(1) + "," + y(v).toFixed(1);
+      prev = t;
+    }
+    svg.append(svgEl("path", { class: "line", d }));
+  }
+  geom = { svg, pts, x, y, m, iw, ih, W };
+}
+
+function setupHover() {
+  const box = $("chart"), tip = $("tip");
+  const hide = () => { tip.style.display = "none"; geom?.svg.querySelector(".hover")?.remove(); };
+  box.addEventListener("pointerleave", hide);
+  box.addEventListener("pointermove", (ev) => {
+    if (!geom || geom.pts.length < 2) return hide();
+    const r = box.getBoundingClientRect();
+    const px = ev.clientX - r.left;
+    let best = geom.pts[0];
+    for (const p of geom.pts) if (Math.abs(geom.x(p[0]) - px) < Math.abs(geom.x(best[0]) - px)) best = p;
+    geom.svg.querySelector(".hover")?.remove();
+    const g = svgEl("g", { class: "hover" });
+    const cx = geom.x(best[0]), cy = geom.y(best[1]);
+    g.append(svgEl("line", { class: "crosshair", x1: cx, x2: cx, y1: geom.m.t, y2: geom.m.t + geom.ih }));
+    g.append(svgEl("circle", { class: "dot", cx, cy, r: 4 }));
+    geom.svg.append(g);
+    tip.replaceChildren(
+      el("div", { class: "tv" }, best[1].toFixed(2) + " MH/s"),
+      el("div", {}, el("span", { class: "key" }), el("span", { class: "tt" }, "Hash rate · " + fmtTime(best[0]))));
+    tip.style.display = "block";
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(cx + 12, 0), geom.W - tw) + "px";
+    tip.style.top = Math.max(cy - 50, 0) + "px";
+  });
+}
+
+async function tick() {
+  try {
+    const res = await fetch("/api/state", { cache: "no-store" });
+    state = await res.json();
+    renderHeader(state); renderAlarms(state); renderTiles(state);
+    renderChart(state); renderFound(state); renderEvents(state); renderHistoryTable(state);
+  } catch (e) {
+    $("link").replaceChildren(badge("critical"), el("span", {}, "Dashboard server not responding"));
+  }
+}
+
+document.querySelectorAll("button[data-work]").forEach((b) => b.addEventListener("click", async () => {
+  b.disabled = true;
+  try { await fetch("/api/work", { method: "POST", body: JSON.stringify({ kind: b.dataset.work }) }); }
+  finally { setTimeout(() => (b.disabled = false), 800); tick(); }
+}));
+new ResizeObserver(() => state && renderChart(state)).observe($("chart"));
+setupHover();
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

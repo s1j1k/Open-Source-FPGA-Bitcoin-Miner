@@ -25,3 +25,10 @@ derive_pll_clocks
 derive_clock_uncertainty
 
 
+
+# Operator interface I/O: slide switches, LEDs and 7-segment displays are
+# static, human-speed signals; no timing relationship to any clock.
+set hmi_inputs [get_ports -nowarn {SW[*]}]
+set hmi_outputs [get_ports -nowarn {LEDR[*] HEX0[*] HEX1[*] HEX2[*] HEX3[*] HEX4[*] HEX5[*]}]
+if {[get_collection_size $hmi_inputs] > 0} { set_false_path -from $hmi_inputs }
+if {[get_collection_size $hmi_outputs] > 0} { set_false_path -to $hmi_outputs }

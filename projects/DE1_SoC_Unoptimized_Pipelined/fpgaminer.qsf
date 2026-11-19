@@ -20,6 +20,9 @@ set_global_assignment -name VERILOG_MACRO "MAIN_CLK_FREQUENCY=50"
 set_global_assignment -name VERILOG_MACRO "MAIN_CLK_DIVIDE=1"
 set_global_assignment -name VERILOG_MACRO "MAIN_CLK_MULTIPLY=2"
 
+# On-board operator interface (7-segment hash rate, status LEDs, SW9 halt).
+set_global_assignment -name VERILOG_MACRO "CONFIG_HMI=1"
+
 
 set_global_assignment -name SDC_FILE ../../boards/DE1_SoC/DE1_SoC.sdc
 set_global_assignment -name VERILOG_FILE ../../cores/unoptimized/sha256_transform.v
@@ -27,3 +30,4 @@ set_global_assignment -name VERILOG_FILE "../../cores/unoptimized/sha-256-functi
 set_global_assignment -name VERILOG_FILE ../../cores/unoptimized_virtual_wire_top.v
 set_global_assignment -name SYSTEMVERILOG_FILE ../../cores/cyclone_v_pll/hashing_pll.sv
 set_global_assignment -name VERILOG_FILE ../../cores/virtual_wire/virtual_wire.v
+set_global_assignment -name VERILOG_FILE ../../cores/hmi/board_hmi.v

@@ -13,8 +13,8 @@ boards and Quartus II 10.x from 2011.
 
 | Metric | Result |
 |--------|--------|
-| Logic utilization | 19,033 / 32,070 ALMs (59%), 30,365 registers |
-| Hash clock | 100 MHz from `altera_pll`. Timing met at all corners: worst-case setup slack +0.109 ns (slow 85 C), Fmax 101.1 MHz |
+| Logic utilization | 19,433 / 32,070 ALMs (61%), 31,107 registers, including the on-board HMI |
+| Hash clock | 100 MHz from `altera_pll`. Timing met at all corners: worst-case setup slack +0.248 ns (slow 85 C), Fmax 102.5 MHz |
 | Hash rate | 25.00 MH/s measured over JTAG |
 | Self-test | 2/2 known-answer vectors passed on the board |
 | Independent check | The FPGA also found two nonces that were not planted (`0x9ccdef20`, `0xacbba77f`). Both were confirmed as valid with `hashlib` |
@@ -58,6 +58,28 @@ the golden nonce (`GNON`) and the live nonce counter (`NONC`).
    two-device chain. This covered the pass path, the broken-firmware path, the
    stalled-clock path, and FPGA (`@2`) selection.
 
+### Operator interface (HMI)
+
+There are two layers, both reading the same firmware. Details are in
+[`scripts/hmi/README.md`](scripts/hmi/README.md).
+
+- **On the board:** the 7-segment displays show the hash rate, measured in
+  hardware against the board oscillator (independent of the PLL), or the last
+  nonce found. The LEDs show pipeline and board heartbeats, halted, new work,
+  nonce found, and a found counter. **SW9 is an operator halt.** The
+  golden-ticket check is masked while halted and until the pipeline refills, so
+  a halt cannot produce a false nonce.
+- **On the PC:** a local dashboard over JTAG. It shows live hash rate and trend,
+  nonce sweep progress, and a log of nonces found. Each nonce is **independently
+  re-verified in software** against the work sent to the FPGA. Alarms follow the
+  ISA-18.2 latch-and-acknowledge pattern: link loss, stalled pipeline, failed
+  verification (latched until acknowledged), rate out of tolerance, and
+  operator halt.
+
+![Operator dashboard running against the DE1-SoC](docs/dashboard.png)
+
+*Live on the DE1-SoC: 25 MH/s, and two nonces found by the FPGA and verified in software.*
+
 ### Quick start (Windows)
 
 ```
@@ -66,6 +88,7 @@ python scripts\test\test_vectors.py  # offline vector check, no board needed
 scripts\de1soc\build.bat             # synthesize, fit, timing analysis -> fpgaminer.sof
 scripts\de1soc\program.bat           # load the FPGA over the on-board USB-Blaster II
 scripts\test\selftest.bat            # on-hardware known-answer test
+scripts\hmi\dashboard.bat            # operator dashboard at http://127.0.0.1:8080
 ```
 
 See `projects/DE1_SoC_Unoptimized_Pipelined/README.md` for configuration and
