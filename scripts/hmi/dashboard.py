@@ -445,6 +445,14 @@ def main():
             sys.exit("Quartus (quartus_stp.exe) not found. Set QUARTUS_ROOTDIR or install to D:\\altera_lite.")
         Bridge(monitor, stp).start()
 
+    # Evaluate alarms continuously, not only when a browser polls, so alarms
+    # raised and cleared while nobody is watching still reach the event log.
+    def evaluate_alarms():
+        while True:
+            monitor.snapshot()
+            time.sleep(0.5)
+    threading.Thread(target=evaluate_alarms, daemon=True).start()
+
     server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(monitor))
     print(f"Dashboard: http://127.0.0.1:{args.port}  (Ctrl+C to stop)")
     try:

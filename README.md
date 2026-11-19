@@ -19,13 +19,104 @@ boards and Quartus II 10.x from 2011.
 | Self-test | 2/2 known-answer vectors passed on the board |
 | Independent check | The FPGA also found two nonces that were not planted (`0x9ccdef20`, `0xacbba77f`). Both were confirmed as valid with `hashlib` |
 
+![Operator dashboard running against the DE1-SoC](docs/dashboard.png)
+
+*The operator dashboard running live against the DE1-SoC: 25 MH/s, with six
+golden nonces found by the FPGA and each re-verified in software. The dip to
+0 MH/s is an operator halt test using SW9 on the board.*
+
+### How it works
+
+#### Bitcoin mining in one paragraph
+
+A Bitcoin block header is 80 bytes: version, previous block hash, Merkle root
+of the block's transactions, timestamp, difficulty target (`bits`) and a 32-bit
+**nonce**. The block's hash is `SHA-256(SHA-256(header))`, read as a 256-bit
+little-endian number. A block is valid only if that number is below the
+network target. SHA-256 cannot be reversed, so the only way to find a valid
+header is to try nonces one after another and hash each one. That is the work
+in proof-of-work. The miner whose header meets the target first earns the block
+reward, which is paid to an address in a transaction the miner put in the block.
+
+#### SHA-256
+
+SHA-256 processes data in 512-bit blocks and keeps a state of eight 32-bit
+words `H0..H7`, starting from fixed constants. Each block goes through one
+*compression*:
+
+1. **Message schedule.** The block supplies 16 words `W0..W15`. 48 more are
+   derived as `W[t] = σ1(W[t-2]) + W[t-7] + σ0(W[t-15]) + W[t-16]`, where σ0
+   and σ1 are fixed rotate/shift/XOR mixes.
+2. **64 rounds.** Working variables `a..h` start from the state. Each round
+   computes `T1 = h + Σ1(e) + Ch(e,f,g) + K[t] + W[t]` and
+   `T2 = Σ0(a) + Maj(a,b,c)`, then shifts the variables down one place, with
+   `e += T1` and a new `a = T1 + T2`. Ch ("choose") and Maj ("majority") are
+   bitwise selectors, and `K[t]` are 64 fixed constants.
+3. **Feed-forward.** The final `a..h` are added to the starting state, giving
+   the new `H0..H7`.
+
+All arithmetic is 32-bit addition modulo 2^32. A padded 80-byte header is two
+blocks; the 32-byte result of the first hash, padded, is one more.
+
+#### How this hardware computes it
+
+| Step | Where | What |
+|------|-------|------|
+| Midstate | Host, once per work unit | The first 64 bytes of the header contain no nonce, so their compression is the same for every nonce. The host computes it once and writes the result (`STAT`) to the FPGA. The remaining 12 header bytes go in `DAT2`. |
+| Hash 1, block 2 | FPGA | Starting from the midstate: the last 12 header bytes, plus the nonce, plus SHA-256 padding. |
+| Hash 2 | FPGA | SHA-256 of the 32-byte result, starting from the standard initial values. |
+| Target check | FPGA, then host | The FPGA flags a **golden nonce** when the top 32 bits of the final hash are zero, meaning it is below 2^224 ("difficulty 1"). The host then checks the full hash in software. |
+
+That is 2 compressions, or 128 rounds, per nonce. Each round is one
+`sha256_digester`: one round's adders plus pipeline registers holding the
+working variables and a 16-word sliding window of the message schedule. Most of
+the 31k registers are in these windows. `sha256_transform` chains round units
+into a pipeline:
+
+- **`CONFIG_LOOP_LOG2=0`**: 64 units per compression, 128 in total. One new
+  nonce enters every clock.
+- **`CONFIG_LOOP_LOG2=2`** (this build): 16 units per compression, 32 in total,
+  each reused for 4 consecutive rounds. That is a quarter of the logic and a quarter of the
+  throughput, so 100 MHz / 4 = **25 MH/s**.
+
+Because the pipeline is deep, the nonce counter has moved on by the time a
+result comes out. The reported nonce is therefore `current nonce − pipeline
+latency`, which is why the HMI masks the check while the counter is halted.
+
+#### Can it make money? No, by about ten orders of magnitude
+
+Figures as of November 2026: network hash rate about 1,000 EH/s (10^21 hashes
+per second), difficulty about 148 T, block reward 3.125 BTC.
+
+| | |
+|---|---|
+| This board's share of the network | 25 × 10^6 / 10^21 = **2.5 × 10^-14** |
+| Hashes needed to find one block | difficulty × 2^32 ≈ 6 × 10^23 |
+| Expected time to find a block solo | **about 800 million years** at 25 MH/s |
+| Expected earnings at the board's share | 450 BTC/day × 2.5 × 10^-14 ≈ **0.4 satoshi per year** (1 satoshi = 10^-8 BTC) |
+| Electricity | A few watts, costing far more than that |
+
+A real block needs roughly 79 leading zero bits in the hash. This design's
+golden nonces have 32. They prove the pipeline computes SHA-256 correctly, but
+they are worth nothing on the network.
+
+Pools don't help either. They pay out per *share* of work, but their minimum
+share difficulty is far above difficulty 1, and they now use the Stratum
+protocol rather than the getwork protocol this code speaks. A single current
+ASIC miner runs at hundreds of TH/s, millions of times faster than this board.
+Mining for real would also need a Bitcoin address to receive payouts, which
+this project deliberately does not have.
+
+This is an FPGA design, verification and HMI exercise that uses Bitcoin's
+hashing as a well-defined, independently checkable workload.
+
 ### What changed
 
 | Area | Change |
 |------|--------|
 | Board support | New `boards/DE1_SoC` pin and device constraints (50 MHz clock on `PIN_AF14`). |
 | Clocking | New `cores/cyclone_v_pll`: Cyclone V has no `altpll`, so this wraps `altera_pll`. It keeps the same integer parameters as the Cyclone IV version, so the shared top-level is unchanged. `altera_pll` takes its frequencies as strings, which are generated in SystemVerilog as typed `string` parameters. Plain Verilog bit-vector strings are rejected by Quartus (Error 114000). The PLL is bypassed when no frequency change is needed. |
-| Project | `projects/DE1_SoC_Unoptimized_Pipelined`: SHA-256 pipeline with 32 stages per hash (`CONFIG_LOOP_LOG2=2`), clocked at 100 MHz, giving 25 MH/s. The 64-stage configuration needed 37.8k ALMs (118% of the device), so the design trades pipeline depth for clock rate. |
+| Project | `projects/DE1_SoC_Unoptimized_Pipelined`: SHA-256 pipeline with 32 round units (16 per compression, each reused 4 times; `CONFIG_LOOP_LOG2=2`), clocked at 100 MHz, giving 25 MH/s. The 64-stage configuration needed 37.8k ALMs (118% of the device), so the design trades pipeline depth for clock rate. |
 | JTAG / programming | On SoC boards the ARM HPS debug port is first on the JTAG chain (`@1`) and the FPGA is second (`@2`). The original script programmed `@1`. It now finds the FPGA by name, and skips the device prompts when there is only one choice. |
 | Tooling | `scripts/de1soc`: one-step build, program and Quartus install scripts, using 64-bit Quartus binaries. |
 
@@ -74,11 +165,8 @@ There are two layers, both reading the same firmware. Details are in
   re-verified in software** against the work sent to the FPGA. Alarms follow the
   ISA-18.2 latch-and-acknowledge pattern: link loss, stalled pipeline, failed
   verification (latched until acknowledged), rate out of tolerance, and
-  operator halt.
-
-![Operator dashboard running against the DE1-SoC](docs/dashboard.png)
-
-*Live on the DE1-SoC: 25 MH/s, and two nonces found by the FPGA and verified in software.*
+  operator halt. Alarms are evaluated continuously in the background, so they
+  are logged even when no browser is open. See the screenshot at the top.
 
 ### Quick start (Windows)
 
