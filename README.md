@@ -9,16 +9,23 @@ This fork ports the miner to the **Terasic DE1-SoC** (Intel/Altera Cyclone V SoC
 self-test with known-answer vectors. The original project targeted Cyclone IV
 boards and Quartus II 10.x from 2011.
 
-**Status:** the RTL port and test tooling are done and verified offline. On-hardware
-bring-up (synthesis, timing closure, self-test on the board) is in progress.
+**Status: running on hardware.** Verified on a DE1-SoC:
+
+| Metric | Result |
+|--------|--------|
+| Logic utilization | 19,033 / 32,070 ALMs (59%), 30,365 registers |
+| Hash clock | 100 MHz from `altera_pll`. Timing met at all corners: worst-case setup slack +0.109 ns (slow 85 C), Fmax 101.1 MHz |
+| Hash rate | 25.00 MH/s measured over JTAG |
+| Self-test | 2/2 known-answer vectors passed on the board |
+| Independent check | The FPGA also found two nonces that were not planted (`0x9ccdef20`, `0xacbba77f`). Both were confirmed as valid with `hashlib` |
 
 ### What changed
 
 | Area | Change |
 |------|--------|
 | Board support | New `boards/DE1_SoC` pin and device constraints (50 MHz clock on `PIN_AF14`). |
-| Clocking | New `cores/cyclone_v_pll`: Cyclone V has no `altpll`, so this wraps `altera_pll`. It keeps the same integer parameters as the Cyclone IV version, so the shared top-level is unchanged. The PLL is bypassed when no frequency change is needed. |
-| Project | `projects/DE1_SoC_Unoptimized_Pipelined`: half-unrolled SHA-256 pipeline (64 stages), 50 MHz, about 25 MH/s. The pipeline depth (`CONFIG_LOOP_LOG2`) and clock can be changed in the `.qsf`. |
+| Clocking | New `cores/cyclone_v_pll`: Cyclone V has no `altpll`, so this wraps `altera_pll`. It keeps the same integer parameters as the Cyclone IV version, so the shared top-level is unchanged. `altera_pll` takes its frequencies as strings, which are generated in SystemVerilog as typed `string` parameters. Plain Verilog bit-vector strings are rejected by Quartus (Error 114000). The PLL is bypassed when no frequency change is needed. |
+| Project | `projects/DE1_SoC_Unoptimized_Pipelined`: SHA-256 pipeline with 32 stages per hash (`CONFIG_LOOP_LOG2=2`), clocked at 100 MHz, giving 25 MH/s. The 64-stage configuration needed 37.8k ALMs (118% of the device), so the design trades pipeline depth for clock rate. |
 | JTAG / programming | On SoC boards the ARM HPS debug port is first on the JTAG chain (`@1`) and the FPGA is second (`@2`). The original script programmed `@1`. It now finds the FPGA by name, and skips the device prompts when there is only one choice. |
 | Tooling | `scripts/de1soc`: one-step build, program and Quartus install scripts, using 64-bit Quartus binaries. |
 

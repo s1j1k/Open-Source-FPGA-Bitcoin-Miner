@@ -2,29 +2,28 @@ source "../../boards/DE1_SoC/DE1_SoC.qsf"
 
 set_global_assignment -name TOP_LEVEL_ENTITY fpgaminer_top
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "25.1"
-set_global_assignment -name LAST_QUARTUS_VERSION "25.1"
+set_global_assignment -name LAST_QUARTUS_VERSION "25.1std.0 Lite Edition"
 set_global_assignment -name ALLOW_ANY_RAM_SIZE_FOR_RECOGNITION ON
 set_global_assignment -name ALLOW_ANY_SHIFT_REGISTER_SIZE_FOR_RECOGNITION ON
 set_global_assignment -name REMOVE_REDUNDANT_LOGIC_CELLS ON
 set_global_assignment -name ALLOW_ANY_ROM_SIZE_FOR_RECOGNITION ON
-set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 
 
-# LOOP_LOG2=1: 64 round stages, one hash every 2 clocks (half-unrolled).
-# The fully unrolled core (LOOP_LOG2=0) is about twice the size and is a
-# tight fit on the 5CSEMA5; try it once this configuration works.
+# LOOP_LOG2=2: 32 round stages, one hash every 4 clocks.
+# LOOP_LOG2=1 (64 stages) needs ~37.8k ALMs and does not fit the 5CSEMA5
+# (32,070 ALMs); LOOP_LOG2=2 needs roughly half that.
 #
 # Hash clock = MAIN_CLK_FREQUENCY * MULTIPLY / DIVIDE (MHz). 1/1 bypasses
-# the PLL. Hash rate = hash clock / 2^LOOP_LOG2, so 50 MHz gives 25 MH/s.
-set_global_assignment -name VERILOG_MACRO "CONFIG_LOOP_LOG2=1"
+# the PLL. Hash rate = hash clock / 2^LOOP_LOG2, so 100 MHz gives 25 MH/s.
+set_global_assignment -name VERILOG_MACRO "CONFIG_LOOP_LOG2=2"
 set_global_assignment -name VERILOG_MACRO "MAIN_CLK_FREQUENCY=50"
 set_global_assignment -name VERILOG_MACRO "MAIN_CLK_DIVIDE=1"
-set_global_assignment -name VERILOG_MACRO "MAIN_CLK_MULTIPLY=1"
+set_global_assignment -name VERILOG_MACRO "MAIN_CLK_MULTIPLY=2"
 
 
 set_global_assignment -name SDC_FILE ../../boards/DE1_SoC/DE1_SoC.sdc
 set_global_assignment -name VERILOG_FILE ../../cores/unoptimized/sha256_transform.v
 set_global_assignment -name VERILOG_FILE "../../cores/unoptimized/sha-256-functions.v"
 set_global_assignment -name VERILOG_FILE ../../cores/unoptimized_virtual_wire_top.v
-set_global_assignment -name VERILOG_FILE ../../cores/cyclone_v_pll/hashing_pll.v
+set_global_assignment -name SYSTEMVERILOG_FILE ../../cores/cyclone_v_pll/hashing_pll.sv
 set_global_assignment -name VERILOG_FILE ../../cores/virtual_wire/virtual_wire.v
